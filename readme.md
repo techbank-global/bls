@@ -205,19 +205,7 @@ cf. subgroup attack
 make test_go
 ```
 
-# WASM(WebAssembly)
-```
-mkdir ../bls-wasm
-make bls-wasm
-```
-* see [bls-wasm](https://github.com/herumi/bls-wasm/)
-* see [BLS signature demo on browser](https://herumi.github.io/bls-wasm/bls-demo.html)
-
 # License
 
 modified new BSD License
 http://opensource.org/licenses/BSD-3-Clause
-
-# Author
-
-MITSUNARI Shigeo(herumi@nifty.com)
