@@ -8,7 +8,7 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"github.com/techbank-global/bls/ffi/go/bls"
+	"github.com/zennittians/bls/ffi/go/bls"
 )
 
 type SeqRead struct {
