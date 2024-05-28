@@ -8,21 +8,12 @@ int wrapReadRandCgo(void *self, void *buf, unsigned int n);
 #include <bls/bls.h>
 */
 import "C"
-import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"unsafe"
-)
-
-const EthModeOld = C.BLS_ETH_MODE_OLD
-const EthModeDraft05 = C.BLS_ETH_MODE_DRAFT_05
-const EthModeDraft06 = C.BLS_ETH_MODE_DRAFT_06
-const EthModeDraft07 = C.BLS_ETH_MODE_DRAFT_07
-const EthModeLatest = C.BLS_ETH_MODE_LATEST
+import "errors"
+import "fmt"
+import "unsafe"
+import "io"
+import "crypto/sha256"
+import "encoding/hex"
 
 // We need to run this before any bls usage externally.
 func init() {
@@ -34,14 +25,6 @@ func hex2byte(s string) ([]byte, error) {
 		return nil, fmt.Errorf("odd length")
 	}
 	return hex.DecodeString(s)
-}
-
-// allow zero length byte
-func getPointer(msg []byte) unsafe.Pointer {
-	if len(msg) == 0 {
-		return nil
-	}
-	return unsafe.Pointer(&msg[0])
 }
 
 // Init --
@@ -85,8 +68,8 @@ func (id *ID) Deserialize(buf []byte) error {
 		return fmt.Errorf("Empty bytes")
 	}
 	// #nosec
-	n := C.blsIdDeserialize(&id.v, getPointer(buf), C.mclSize(len(buf)))
-	if n == 0 || int(n) != len(buf) {
+	err := C.blsIdDeserialize(&id.v, unsafe.Pointer(&buf[0]), C.mclSize(len(buf)))
+	if err == 0 {
 		return fmt.Errorf("err blsIdDeserialize %x", buf)
 	}
 	return nil
@@ -142,7 +125,7 @@ func (sec *SecretKey) Serialize() []byte {
 	if sec == nil {
 		return []byte{}
 	}
-	buf := make([]byte, 48)
+	buf := make([]byte, 2048)
 	// #nosec
 	n := C.blsSecretKeySerialize(unsafe.Pointer(&buf[0]), C.mclSize(len(buf)), &sec.v)
 	if n == 0 {
@@ -160,8 +143,8 @@ func (sec *SecretKey) Deserialize(buf []byte) error {
 		return fmt.Errorf("Empty bytes")
 	}
 	// #nosec
-	n := C.blsSecretKeyDeserialize(&sec.v, getPointer(buf), C.mclSize(len(buf)))
-	if n == 0 || int(n) != len(buf) {
+	err := C.blsSecretKeyDeserialize(&sec.v, unsafe.Pointer(&buf[0]), C.mclSize(len(buf)))
+	if err == 0 {
 		return fmt.Errorf("err blsSecretKeyDeserialize %x", buf)
 	}
 	return nil
@@ -188,16 +171,6 @@ func (sec *SecretKey) SetLittleEndian(buf []byte) error {
 	return nil
 }
 
-// SetLittleEndianMod --
-func (sec *SecretKey) SetLittleEndianMod(buf []byte) error {
-	// #nosec
-	err := C.blsSecretKeySetLittleEndianMod(&sec.v, unsafe.Pointer(&buf[0]), C.mclSize(len(buf)))
-	if err != 0 {
-		return fmt.Errorf("err blsSecretKeySetLittleEndianMod %x", err)
-	}
-	return nil
-}
-
 // SerializeToHexStr --
 func (sec *SecretKey) SerializeToHexStr() string {
 	return hex.EncodeToString(sec.Serialize())
@@ -220,19 +193,11 @@ func (sec *SecretKey) IsEqual(rhs *SecretKey) bool {
 	return C.blsSecretKeyIsEqual(&sec.v, &rhs.v) == 1
 }
 
-// IsZero --
-func (sec *SecretKey) IsZero() bool {
-	return C.blsSecretKeyIsZero(&sec.v) == 1
-}
-
 // SetByCSPRNG --
 func (sec *SecretKey) SetByCSPRNG() {
 	err := C.blsSecretKeySetByCSPRNG(&sec.v)
 	if err != 0 {
 		panic("err blsSecretKeySetByCSPRNG")
-	}
-	if sec.IsZero() {
-		panic("err blsSecretKeySetByCSPRNG zero")
 	}
 }
 
@@ -317,29 +282,12 @@ type PublicKey struct {
 	v C.blsPublicKey
 }
 
-// PublicKeys ..
-type PublicKeys []PublicKey
-
-// JSON provides a JSON string dump of slice of PublicKeys in Hexformat
-func (keys PublicKeys) JSON() string {
-	type T struct {
-		Count      int      `json:"count"`
-		PublicKeys []string `json:"public-keys"`
-	}
-	t := T{len(keys), make([]string, len(keys))}
-	for i := range keys {
-		t.PublicKeys[i] = keys[i].SerializeToHexStr()
-	}
-	b, _ := json.Marshal(t)
-	return string(b)
-}
-
 // Serialize --
 func (pub *PublicKey) Serialize() []byte {
 	if pub == nil {
 		return []byte{}
 	}
-	buf := make([]byte, 96)
+	buf := make([]byte, 2048)
 	// #nosec
 	n := C.blsPublicKeySerialize(unsafe.Pointer(&buf[0]), C.mclSize(len(buf)), &pub.v)
 	if n == 0 {
@@ -357,8 +305,8 @@ func (pub *PublicKey) Deserialize(buf []byte) error {
 		return errors.New("Empty bytes")
 	}
 	// #nosec
-	n := C.blsPublicKeyDeserialize(&pub.v, getPointer(buf), C.mclSize(len(buf)))
-	if n == 0 || int(n) != len(buf) {
+	err := C.blsPublicKeyDeserialize(&pub.v, unsafe.Pointer(&buf[0]), C.mclSize(len(buf)))
+	if err == 0 {
 		return fmt.Errorf("err blsPublicKeyDeserialize %x", buf)
 	}
 	return nil
@@ -390,11 +338,6 @@ func (pub *PublicKey) IsEqual(rhs *PublicKey) bool {
 		return false
 	}
 	return C.blsPublicKeyIsEqual(&pub.v, &rhs.v) == 1
-}
-
-// IsZero --
-func (pub *PublicKey) IsZero() bool {
-	return C.blsPublicKeyIsZero(&pub.v) == 1
 }
 
 // Add --
@@ -458,7 +401,7 @@ func (sig *Sign) Serialize() []byte {
 	if sig == nil {
 		return []byte{}
 	}
-	buf := make([]byte, 48)
+	buf := make([]byte, 2048)
 	// #nosec
 	n := C.blsSignatureSerialize(unsafe.Pointer(&buf[0]), C.mclSize(len(buf)), &sig.v)
 	if n == 0 {
@@ -476,8 +419,8 @@ func (sig *Sign) Deserialize(buf []byte) error {
 		return errors.New("Empty buf")
 	}
 	// #nosec
-	n := C.blsSignatureDeserialize(&sig.v, getPointer(buf), C.mclSize(len(buf)))
-	if n == 0 || int(n) != len(buf) {
+	err := C.blsSignatureDeserialize(&sig.v, unsafe.Pointer(&buf[0]), C.mclSize(len(buf)))
+	if err == 0 {
 		return fmt.Errorf("err blsSignatureDeserialize %x", buf)
 	}
 	return nil
@@ -511,11 +454,6 @@ func (sig *Sign) IsEqual(rhs *Sign) bool {
 	return C.blsSignatureIsEqual(&sig.v, &rhs.v) == 1
 }
 
-// IsZero --
-func (sig *Sign) IsZero() bool {
-	return C.blsSignatureIsZero(&sig.v) == 1
-}
-
 // GetPublicKey --
 func (sec *SecretKey) GetPublicKey() (pub *PublicKey) {
 	if sec == nil {
@@ -524,16 +462,6 @@ func (sec *SecretKey) GetPublicKey() (pub *PublicKey) {
 	pub = new(PublicKey)
 	C.blsGetPublicKey(&pub.v, &sec.v)
 	return pub
-}
-
-// GetSafePublicKey -- error if sec is zero
-func (sec *SecretKey) GetSafePublicKey() (pub *PublicKey, err error) {
-	if sec.IsZero() {
-		return nil, fmt.Errorf("sec is zero")
-	}
-	pub = new(PublicKey)
-	C.blsGetPublicKey(&pub.v, &sec.v)
-	return pub, nil
 }
 
 // Sign -- Constant Time version
@@ -583,33 +511,6 @@ func (sig *Sign) Verify(pub *PublicKey, m string) bool {
 	buf := []byte(m)
 	// #nosec
 	return C.blsVerify(&sig.v, &pub.v, unsafe.Pointer(&buf[0]), C.mclSize(len(buf))) == 1
-}
-
-func bool2int(b bool) C.int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-// VerifySignatureOrder --
-func VerifySignatureOrder(doVerify bool) {
-	C.blsSignatureVerifyOrder(bool2int(doVerify))
-}
-
-// VerifyPublicKeyOrder --
-func VerifyPublicKeyOrder(doVerify bool) {
-	C.blsPublicKeyVerifyOrder(bool2int(doVerify))
-}
-
-// IsValidOrder --
-func (pub *PublicKey) IsValidOrder() bool {
-	return C.blsPublicKeyIsValidOrder(&pub.v) == 1
-}
-
-// IsValidOrder --
-func (sig *Sign) IsValidOrder() bool {
-	return C.blsSignatureIsValidOrder(&sig.v) == 1
 }
 
 // VerifyPop --
@@ -689,61 +590,20 @@ func (sig *Sign) VerifyAggregateHashes(pubVec []PublicKey, hash [][]byte) bool {
 	if sig == nil {
 		return false
 	}
-	if pubVec == nil || len(pubVec) == 0 {
+	if pubVec == nil || len(pubVec) == 0{
 		return false
 	}
 	n := len(hash)
-	if n == 0 || len(pubVec) != n {
+	if n == 0 {
 		return false
 	}
-	hashByte := len(hash[0])
+	hashByte := GetOpUnitSize() * 8
 	h := make([]byte, n*hashByte)
 	for i := 0; i < n; i++ {
 		hn := len(hash[i])
 		copy(h[i*hashByte:(i+1)*hashByte], hash[i][0:min(hn, hashByte)])
 	}
 	return C.blsVerifyAggregatedHashes(&sig.v, &pubVec[0].v, unsafe.Pointer(&h[0]), C.mclSize(hashByte), C.mclSize(n)) == 1
-}
-
-// SignatureVerifyOrder --
-// check the correctness of the order of signature in deserialize if true
-func SignatureVerifyOrder(doVerify bool) {
-	var b = 0
-	if doVerify {
-		b = 1
-	}
-	C.blsSignatureVerifyOrder(C.int(b))
-}
-
-// SignByte --
-func (sec *SecretKey) SignByte(msg []byte) (sig *Sign) {
-	sig = new(Sign)
-	// #nosec
-	C.blsSign(&sig.v, &sec.v, getPointer(msg), C.mclSize(len(msg)))
-	return sig
-}
-
-// VerifyByte --
-func (sig *Sign) VerifyByte(pub *PublicKey, msg []byte) bool {
-	if sig == nil || pub == nil {
-		return false
-	}
-	// #nosec
-	return C.blsVerify(&sig.v, &pub.v, getPointer(msg), C.mclSize(len(msg))) == 1
-}
-
-// Aggregate --
-func (sig *Sign) Aggregate(sigVec []Sign) {
-	C.blsAggregateSignature(&sig.v, &sigVec[0].v, C.mclSize(len(sigVec)))
-}
-
-// FastAggregateVerify --
-func (sig *Sign) FastAggregateVerify(pubVec []PublicKey, msg []byte) bool {
-	if pubVec == nil || len(pubVec) == 0 {
-		return false
-	}
-	n := len(pubVec)
-	return C.blsFastAggregateVerify(&sig.v, &pubVec[0].v, C.mclSize(n), getPointer(msg), C.mclSize(len(msg))) == 1
 }
 
 ///
@@ -775,9 +635,4 @@ func SetRandFunc(randReader io.Reader) {
 		// use default random generator
 		C.blsSetRandFunc(nil, C.ReadRandFunc(unsafe.Pointer(nil)))
 	}
-}
-
-// BlsGetGeneratorOfPublicKey -
-func BlsGetGeneratorOfPublicKey(pub *PublicKey) {
-	C.blsGetGeneratorOfPublicKey(&pub.v)
 }
